@@ -1,0 +1,5 @@
+name =  Civicrm  Email  Campaign
+description = Pledge Email Sending
+dependencies[] = civicrm
+package = CiviCRM
+core = 7.x

@@ -1,0 +1,175 @@
+<?php 
+
+/*
+ +--------------------------------------------------------------------+
+ | CiviCRM version 4.0                                                |
+ +--------------------------------------------------------------------+
+ | Copyright CiviCRM LLC (c) 2004-2011                                |
+ +--------------------------------------------------------------------+
+ | This file is a part of CiviCRM.                                    |
+ |                                                                    |
+ | CiviCRM is free software; you can copy, modify, and distribute it  |
+ | under the terms of the GNU Affero General Public License           |
+ | Version 3, 19 November 2007 and the CiviCRM Licensing Exception.   |
+ |                                                                    |
+ | CiviCRM is distributed in the hope that it will be useful, but     |
+ | WITHOUT ANY WARRANTY; without even the implied warranty of         |
+ | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.               |
+ | See the GNU Affero General Public License for more details.        |
+ |                                                                    |
+ | You should have received a copy of the GNU Affero General Public   |
+ | License and the CiviCRM Licensing Exception along                  |
+ | with this program; if not, contact CiviCRM LLC                     |
+ | at info[AT]civicrm[DOT]org. If you have questions about the        |
+ | GNU Affero General Public License or the licensing of CiviCRM,     |
+ | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
+ +--------------------------------------------------------------------+
+*/
+
+/**
+ *
+ * @package CRM
+ * @copyright CiviCRM LLC (c) 2004-2011
+ * $Id$
+ *
+ */
+ // require_once 'email_cronjob.php';
+
+define( 'CIVICRM_MTL_ACTIVITY_MAPPING' ,   'mtl_civicrm_emailcampaign_mapping' ); 
+//define( 'CIVICRM_MTL_GROUP_ID' ,   '6' );  
+
+function mtl_civicrm_emailcampaign_civicrm_config( &$config ) {
+    $template =& CRM_Core_Smarty::singleton( );
+    $customRoot = dirname( __FILE__ );
+    $customDir = $customRoot . DIRECTORY_SEPARATOR . 'templates';
+    if ( is_array( $template->template_dir ) ) {
+        array_unshift( $template->template_dir, $customDir );
+    } else {
+        $template->template_dir = array( $customDir, $template->template_dir );
+    }
+    // also fix php include path
+    $include_path = $customRoot . PATH_SEPARATOR . get_include_path( );
+    set_include_path( $include_path );
+}
+
+
+function mtl_civicrm_emailcampaign_civicrm_install(){
+
+    $query = "CREATE TABLE IF NOT EXISTS `mtl_civicrm_emailcampaign_mapping` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `group_id` int(11) NOT NULL,
+              `activity_type_1` int(11) NOT NULL,
+              `activity_type_2` int(11) NOT NULL,
+              `activity_type_3` int(11) NOT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `group_id` (`group_id`)
+            ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;";
+
+    CRM_Core_DAO::executeQuery($query);
+    
+    
+}
+
+
+
+
+function mtl_civicrm_emailcampaign_civicrm_xmlMenu( &$files ) {
+    $files[] = dirname(__FILE__)."/xml/Menu/emailCampaign-mapping.xml";
+}
+
+
+
+function mtl_civicrm_emailcampaign_civicrm_navigationMenu( &$params ) {
+  //  Get the maximum key of $params    
+    $maxKey = ( max( array_keys($params) ) );    
+    $params[$maxKey+1] = array (
+								'attributes' => array (
+                                              'label'      => 'Others',
+                                              'name'       => 'Others',
+                                              'url'        => null,
+                                              'permission' => 'administer CiviCRM',
+                                              'operator'   => null,
+                                              'separator'  => null,
+                                              'parentID'   => null,
+                                              'navID'      => $maxKey+1,
+                                              'active'     => 1
+                                              ),
+                                              
+								'child' =>  array (
+                                              '1' => array (
+                                                            'attributes' => array (
+                                                                                   'label'      => 'EmailCampaign Mapping',
+                                                                                   'name'       => 'EmailCampaign Mapping',
+                                                                                   'url'        => 'civicrm/emailCampaign-mapping&reset=1',
+                                                                                   'permission' => 'administer CiviCRM',
+                                                                                   'operator'   => null,
+                                                                                   'separator'  => 0,
+                                                                                   'parentID'   => $maxKey+1,
+                                                                                   'navID'      => 1,
+                                                                                   'active'     => 1
+                                                                                    ),
+                                                        'child' => null
+                                                            ),
+                                             
+                                            )
+								);
+								
+}
+
+
+function mtl_civicrm_emailcampaign_civicrm_post($op, $objectName, $objectId, &$objectRef  ) {
+  
+ if($objectName =='GroupContact' && $op =='create'){  
+     foreach($objectRef as $key => $id){    
+        $contactID = $id;
+        $today       = date('d-m-Y h:i:s A');
+        $tomorrow        = date('d-m-Y h:i:s A', strtotime( "+24 hours"));
+        $first_week      = date('d-m-Y h:i:s A', strtotime( "+1 week"));
+        $second_week     = date('d-m-Y h:i:s A', strtotime( "+2 week"));
+        //echo $tomorrow."<br>".$first_week."<br>".$second_week;  exit; 
+        $select_sql = "SELECT * FROM  ".CIVICRM_MTL_ACTIVITY_MAPPING;           
+        $select_dao = CRM_Core_DAO::executeQuery($select_sql);
+        while($select_dao->fetch())  {
+            if($objectId == $select_dao->group_id){         
+               require_once 'api/api.php'; 
+               //tomorrow
+               $tomorrow_params =   array ('version'             =>'3', 
+                                            'activity_type_id'   =>$select_dao->activity_type_1, 
+                                            'activity_subject'   =>'Pledge Email Scheduled',                                               
+                                            'target_contact_id'  =>$contactID,                                         
+                                            'source_contact_id'  =>$contactID,
+                                            'activity_date_time' => $today,
+                                            'activity_status_id' =>'1',
+                                  );
+              $tomorrow_activity = civicrm_api("Activity","create",$tomorrow_params );
+              
+              //first week     
+              $first_week_params = array  ('version'            =>'3', 
+                                          'activity_type_id'    =>$select_dao->activity_type_2, 
+                                          'activity_subject'    =>'Pledge Email Scheduled', 
+                                          'target_contact_id'  =>$contactID,                                         
+                                          'source_contact_id'   =>$contactID,
+                                          'activity_date_time'  => $first_week,
+                                          'activity_status_id'  =>'1',
+                                  );
+              $first_week_activity = civicrm_api("Activity","create",$first_week_params );
+              
+              //second Week    
+              $second_week_params = array ('version'            =>'3', 
+                                          'activity_type_id'    =>$select_dao->activity_type_3, 
+                                          'activity_subject'    =>'Pledge Email Scheduled',
+                                          'target_contact_id'  =>$contactID,                                        
+                                          'source_contact_id'   =>$contactID,
+                                          'activity_date_time'  => $second_week,
+                                          'activity_status_id'  =>'1',
+                                  );
+              $second_week_activity = civicrm_api("Activity","create",$second_week_params );
+           } 
+        }     
+     }
+ }
+    
+}
+
+
+
